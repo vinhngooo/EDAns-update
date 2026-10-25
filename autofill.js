@@ -7,6 +7,22 @@
   const answers = list => (list?.a || []).filter(a => identity(a) && identity(a) !== '0');
 
   function expectedAnswers(questions, kind) {
+    if (kind === 'matching') {
+      // ED's first list contains the two column headings. Each following
+      // list is a pair; dir=1 makes the first side the draggable answer.
+      const side = String(questions[0]?.dir) === '1' ? 0 : 1;
+      const expected = [];
+      for (const question of questions) {
+        if (!Array.isArray(question.al) || question.al.length < 2) return [];
+        for (const pair of question.al.slice(1)) {
+          if (!Array.isArray(pair.a) || pair.a.length !== 2) return [];
+          const answer = pair.a[side];
+          if (!identity(answer) || identity(answer) === '0') return [];
+          expected.push(answer);
+        }
+      }
+      return expected;
+    }
     if (kind === 'sequence') {
       const lists = questions.flatMap(q => q.al || []);
       if (lists.some(list => !Number.isFinite(Number(list.id)) || answers(list).length !== 1)) return [];
@@ -60,13 +76,21 @@
       const tx = Math.max(1, Math.min(innerWidth - 2, end.left + end.width / 2));
       const ty = Math.max(1, Math.min(innerHeight - 2, end.top + end.height / 2));
       if (tx < end.left || tx > end.right || ty < end.top || ty > end.bottom) return false;
-      const sx=x, sy=y;
-      for (let i=1; i<=12; i++) {
-        if (!active()) return false;
-        x=sx+(tx-sx)*i/12;
-        y=sy+(ty-sy)*i/12;
-        mouse(document.documentElement, 'mousemove', x, y);
-        await sleep(16);
+      // In matching tables a diagonal path can hover an earlier filled row.
+      // Its temporary drag placeholder then grows over the intended row.
+      // Approach along the gap beside the table before entering the row.
+      const matching = !!target.closest('ed-la-matching');
+      const sideX = Math.max(1,Math.min(innerWidth-2,x >= end.right ? end.right+8 : end.left-8));
+      const path = matching ? [[sideX,y],[sideX,ty],[tx,ty]] : [[tx,ty]];
+      for (const [nextX,nextY] of path) {
+        const sx=x, sy=y, steps=matching ? 6 : 12;
+        for (let i=1; i<=steps; i++) {
+          if (!active()) return false;
+          x=sx+(nextX-sx)*i/steps;
+          y=sy+(nextY-sy)*i/steps;
+          mouse(document.documentElement, 'mousemove', x, y);
+          await sleep(16);
+        }
       }
       mouse(document.elementFromPoint(x,y) || target, 'mouseup', x, y);
       held=false;
@@ -78,10 +102,11 @@
   }
 
   async function fill(questions, isCurrent = () => true) {
-    const root = document.querySelector('ed-la-sequence-image, ed-la-dndcloze, ed-la-dndclassification');
+    const root = document.querySelector('ed-la-sequence-image, ed-la-dndcloze, ed-la-dndclassification, ed-la-matching');
     if (!root) return {supported:false};
     const classification = root.matches('ed-la-dndclassification');
-    const kind = root.matches('ed-la-sequence-image') ? 'sequence' : 'cloze';
+    const matching = root.matches('ed-la-matching');
+    const kind = matching ? 'matching' : root.matches('ed-la-sequence-image') ? 'sequence' : 'cloze';
     const allZones = [...root.querySelectorAll('.dndZone')];
     const isBank = zone => zone.getAttribute('dg_name') === 'TTpTablePlaceHolder' ||
       !!zone.closest('.dndBank, .bankContainer, #bankContainer, .prCl__container--bank') || /^bank_/i.test(zone.id);
@@ -111,8 +136,8 @@
     if (ids.some(id => available.filter(value => value === id).length !== 1)) {
       return result('Đáp án chưa khớp bài đang mở. Hãy lấy lại đáp án.');
     }
-    if (classification) {
-      if (!bank) return result('Chưa tìm thấy ngân hàng câu để phân loại.');
+    if (classification || matching) {
+      if (!bank) return result('Chưa tìm thấy ngân hàng đáp án.');
       // Free places before filling: the site's column capacity rejects a drop
       // into a full column. Return misplaced statements through normal drags.
       for (let i=0; i<zones.length; i++) {

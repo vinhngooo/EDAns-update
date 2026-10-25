@@ -28,6 +28,12 @@ const classificationQuestions = [{id:3, al:[
   {id:12,a:[{id:0,txt:'Mel...'},{id:54,txt:'is very anxious.'},{id:71,txt:'is not an experienced movie actor.'},{id:35,txt:'keeps making the same mistake.'}]},
   {id:4,a:[{id:0,txt:'Ralph...'},{id:93,txt:'is very reassuring.'},{id:3,txt:'has been acting for a long time.'},{id:82,txt:'does other things besides acting.'}]},
 ]}];
+const matchingQuestions = [{id:4,dir:'0',al:[
+  {id:77,a:[{id:0,txt:'Questions'},{id:0,txt:'Answers'}]},
+  {id:11,a:[{id:41,txt:'So I hear you work in the movie industry. Are you an actor?'},{id:28,txt:'No, I work behind the scenes.'}]},
+  {id:5,a:[{id:52,txt:'Really? What do you do?'},{id:87,txt:'I work as a camera operator. I prepare and operate the camera equipment.'}]},
+  {id:30,a:[{id:63,txt:'Is it a very technical job?'},{id:84,txt:'You need to be technical, but you also get to be creative.'}]},
+]}];
 
 async function fixture(kind, questions) {
   const browser = await chromium.launch({ ...(process.env.EDANS_CHROME_PATH ? {executablePath:process.env.EDANS_CHROME_PATH} : {channel:'chrome'}), headless: true });
@@ -44,6 +50,11 @@ async function fixture(kind, questions) {
     .prCLZ__regContainer { display:block; }
     .classification { display:flex; gap:20px; }
     .classification > .prCl__container { width:280px; }
+    .prMT_T2T__main { display:flex; gap:24px; }
+    .prMT_T2T__answersWrapper { width:720px !important; }
+    .prMT_T2T__answersRow { display:flex; align-items:center; }
+    .prMT_T2T__answersTextW { width:360px !important; }
+    .prMT_T2T__regContainer { width:310px !important; }
     .dndBank .dndZone { display:flex; flex-wrap:wrap; }
     .gu-mirror { position:fixed !important; margin:0 !important; z-index:9999 !important; opacity:.8; }
     .gu-hide { display:none !important; } .gu-transit { opacity:.2; }
@@ -75,6 +86,10 @@ async function fixture(kind, questions) {
         else for(let n=si; n<ti; n++) transfer(n+1,n);
       } else if(kind === 'classification') {
         if(ti !== zones.length-1 && ti !== si && models[ti].length === 3) {
+          drake.cancel(); drake.isCancel=true;
+        }
+      } else if(kind === 'matching') {
+        if(ti !== zones.length-1 && ti !== si && models[ti].length === 1) {
           drake.cancel(); drake.isCancel=true;
         }
       } else if(ti !== zones.length-1 && si !== ti) transfer(ti,zones.length-1);
@@ -230,5 +245,52 @@ test('duplicate classification IDs are rejected before any drag', async () => {
     assert.deepEqual(await page.evaluate(()=>window.fixtureModels),before);
     assert.equal(await page.evaluate(()=>window.fixtureDrags),0);
     assert.match(await page.locator('.ansStatus').innerText(),/chưa|không|thiếu/i);
+  } finally {await browser.close();}
+});
+
+test('V matches three answers to their questions and leaves the two distractors', async () => {
+  const {browser,page}=await fixture('matching',matchingQuestions);
+  try {
+    await page.keyboard.press('v');
+    await page.waitForFunction(()=>!document.querySelector('.buttonX').disabled);
+    assert.deepEqual((await page.evaluate(()=>window.fixtureModels)).slice(0,3),[['28'],['87'],['84']]);
+    assert.deepEqual((await page.evaluate(()=>window.fixtureModels)).at(-1).sort(),['25','94']);
+    assert.match(await page.locator('.ansStatus').innerText(),/3\/3/);
+    const drags=await page.evaluate(()=>window.fixtureDrags);
+    await page.keyboard.press('v');
+    await page.waitForFunction(()=>!document.querySelector('.buttonX').disabled);
+    assert.equal(await page.evaluate(()=>window.fixtureDrags),drags);
+  } finally {await browser.close();}
+});
+
+test('matching with the reversed API column direction selects the draggable side', async () => {
+  const questions=structuredClone(matchingQuestions);
+  questions[0].dir='1';
+  questions[0].al.forEach(list=>list.a.reverse());
+  const {browser,page}=await fixture('matching',questions);
+  try {
+    await page.getByRole('button',{name:'Lấy lại đáp án',exact:true}).click();
+    await page.waitForFunction(()=>!document.querySelector('.buttonX').disabled);
+    assert.deepEqual((await page.evaluate(()=>window.fixtureModels)).slice(0,3),[['28'],['87'],['84']]);
+    assert.deepEqual((await page.evaluate(()=>window.fixtureModels)).at(-1).sort(),['25','94']);
+  } finally {await browser.close();}
+});
+
+test('matching answers already placed in the wrong full rows are corrected', async () => {
+  const {browser,page}=await fixture('matching',matchingQuestions);
+  try {
+    await page.evaluate(()=>{
+      const zones=[...document.querySelectorAll('.dndZone')];
+      const nodes=new Map([...document.querySelectorAll('ed-la-dnditem')].map(el=>[el.querySelector('[ans_id]').getAttribute('ans_id'),el]));
+      const rows=[['87'],['84'],['28'],['94','25']];
+      rows.forEach((row,i)=>{
+        window.fixtureModels[i].splice(0,window.fixtureModels[i].length,...row);
+        zones[i].replaceChildren(...row.map(id=>nodes.get(id)));
+      });
+    });
+    await page.keyboard.press('v');
+    await page.waitForFunction(()=>!document.querySelector('.buttonX').disabled);
+    assert.deepEqual((await page.evaluate(()=>window.fixtureModels)).slice(0,3),[['28'],['87'],['84']]);
+    assert.deepEqual((await page.evaluate(()=>window.fixtureModels)).at(-1).sort(),['25','94']);
   } finally {await browser.close();}
 });
