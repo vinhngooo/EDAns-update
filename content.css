@@ -1,0 +1,43 @@
+.buttonX {
+  display: block;
+  position: relative;
+  width: 150px;
+  height: 40px;
+  padding: 5px 10px;
+  font: 500 20px/1.3 system-ui;
+  z-index: 1000;
+  background-color: lightgreen;
+  cursor: pointer;
+  border-radius: 10px;
+}
+.buttonX:disabled {
+  opacity: 0.65;
+  cursor: wait;
+}
+.carry {
+  position: fixed;
+  top: 70px;
+  left: 300px;
+  z-index: 1000;
+  max-width: min(480px, 90vw);
+}
+.ansShow {
+  position: relative;
+  font: 18px/1.8 system-ui;
+  background-color: white;
+  border: 1px solid;
+  padding-bottom: 2px;
+  z-index: 1000;
+  max-height: 42vh;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  padding: 3px 6px;
+}
+.ansShow:empty, .ansStatus:empty { display: none; }
+.ansStatus {
+  background: #fff;
+  border: 1px solid #777;
+  padding: 4px 6px;
+  font: 14px/1.5 system-ui;
+  max-width: 480px;
+}

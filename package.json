@@ -1,0 +1,11 @@
+{
+  "name": "edans-autofill-validation",
+  "private": true,
+  "scripts": {
+    "prepare-tests": "node tests/prepare.cjs",
+    "test": "node --test tests/autofill.test.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}
